@@ -4,62 +4,85 @@ import { apiErrorMessage } from "../../api/client";
 import type { AchievementLevel, Subject, SubjectGrade } from "../../api/types";
 
 const SLOTS: { year: number; semester: number; label: string }[] = [
-  { year: 1, semester: 1, label: "1학년 1학기" },
-  { year: 1, semester: 2, label: "1학년 2학기" },
-  { year: 2, semester: 1, label: "2학년 1학기" },
-  { year: 2, semester: 2, label: "2학년 2학기" },
-  { year: 3, semester: 1, label: "3학년 1학기" },
+  { year: 1, semester: 1, label: "1-1" },
+  { year: 1, semester: 2, label: "1-2" },
+  { year: 2, semester: 1, label: "2-1" },
+  { year: 2, semester: 2, label: "2-2" },
+  { year: 3, semester: 1, label: "3-1" },
 ];
+
+function cellKey(subjectId: number, year: number, semester: number) {
+  return `${subjectId}:${year}:${semester}`;
+}
 
 export default function SubjectGradesPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [levels, setLevels] = useState<AchievementLevel[]>([]);
-  const [grades, setGrades] = useState<SubjectGrade[]>([]);
+  const [validCodes, setValidCodes] = useState<Set<string>>(new Set(["A", "B", "C", "D", "E"]));
+  const [existing, setExisting] = useState<Record<string, SubjectGrade>>({});
+  const [grid, setGrid] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Record<string, { subjectId: string; code: string }>>({});
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   function load() {
     Promise.all([getSubjects(), getAchievementLevels(), getMyGrades()])
-      .then(([subj, lvl, g]) => {
+      .then(([subj, levels, grades]) => {
         setSubjects(subj);
-        setLevels(lvl);
-        setGrades(g);
+        setValidCodes(new Set(levels.map((l: AchievementLevel) => l.code.toUpperCase())));
+        const existingMap: Record<string, SubjectGrade> = {};
+        const gridMap: Record<string, string> = {};
+        for (const g of grades) {
+          const key = cellKey(g.subject_id, g.year, g.semester);
+          existingMap[key] = g;
+          gridMap[key] = g.achievement_code.toUpperCase();
+        }
+        setExisting(existingMap);
+        setGrid(gridMap);
       })
       .catch((err) => setError(apiErrorMessage(err)));
   }
 
   useEffect(load, []);
 
-  const gradesBySlot = useMemo(() => {
-    const map = new Map<string, SubjectGrade[]>();
-    for (const g of grades) {
-      const key = `${g.year}-${g.semester}`;
-      map.set(key, [...(map.get(key) ?? []), g]);
-    }
-    return map;
-  }, [grades]);
+  const sortedCodes = useMemo(() => Array.from(validCodes).sort(), [validCodes]);
 
-  const subjectName = (id: number) => subjects.find((s) => s.id === id)?.name ?? "?";
-
-  async function handleAdd(year: number, semester: number) {
-    const key = `${year}-${semester}`;
-    const draft = pending[key];
-    if (!draft?.subjectId || !draft?.code) return;
-    try {
-      await upsertGrade({ subject_id: Number(draft.subjectId), year, semester, achievement_code: draft.code });
-      setPending((p) => ({ ...p, [key]: { subjectId: "", code: "" } }));
-      load();
-    } catch (err) {
-      setError(apiErrorMessage(err));
-    }
+  function handleCellChange(key: string, raw: string) {
+    const cleaned = raw.toUpperCase().replace(/[^A-E]/g, "").slice(-1);
+    setGrid((prev) => ({ ...prev, [key]: cleaned }));
+    setSaved(false);
   }
 
-  async function handleDelete(id: number) {
+  async function handleSave() {
+    setError(null);
+    setSaved(false);
+    setSaving(true);
     try {
-      await deleteGrade(id);
+      const tasks: Promise<unknown>[] = [];
+      for (const subject of subjects) {
+        for (const slot of SLOTS) {
+          const key = cellKey(subject.id, slot.year, slot.semester);
+          const value = (grid[key] ?? "").trim();
+          const existingGrade = existing[key];
+
+          if (value === "") {
+            if (existingGrade) tasks.push(deleteGrade(existingGrade.id));
+            continue;
+          }
+          if (!validCodes.has(value)) continue;
+          if (existingGrade && existingGrade.achievement_code.toUpperCase() === value) continue;
+
+          tasks.push(
+            upsertGrade({ subject_id: subject.id, year: slot.year, semester: slot.semester, achievement_code: value }),
+          );
+        }
+      }
+      await Promise.all(tasks);
       load();
+      setSaved(true);
     } catch (err) {
       setError(apiErrorMessage(err));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -69,87 +92,61 @@ export default function SubjectGradesPage() {
     <div>
       <h2 className="page-title">교과 성적 입력</h2>
       <p className="muted" style={{ marginBottom: "1rem" }}>
-        수학 과목은 자동으로 2배 가중치가 적용됩니다. 일부 학기/학년 성적이 없으면 규정에 따라 자동으로 대체됩니다.
+        칸에 성취도({sortedCodes.join(", ")})를 입력하세요. 대소문자 구분 없이 입력 가능하며, 비워두면 해당 학기 성적이
+        삭제됩니다. 수학 과목은 자동으로 2배 가중치가 적용되고, 일부 학기/학년 성적이 없으면 규정에 따라 자동으로
+        대체됩니다.
       </p>
-      {SLOTS.map(({ year, semester, label }) => {
-        const key = `${year}-${semester}`;
-        const rows = gradesBySlot.get(key) ?? [];
-        const usedSubjectIds = new Set(rows.map((r) => r.subject_id));
-        const draft = pending[key] ?? { subjectId: "", code: "" };
-        return (
-          <div className="card" key={key}>
-            <h2>{label}</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>과목</th>
-                  <th>성취도</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((g) => (
-                  <tr key={g.id}>
-                    <td>
-                      {subjectName(g.subject_id)}
-                      {subjects.find((s) => s.id === g.subject_id)?.is_math && <span className="tag">수학</span>}
-                      {subjects.find((s) => s.id === g.subject_id)?.is_informatics && <span className="tag">정보</span>}
-                    </td>
-                    <td>{g.achievement_code}</td>
-                    <td>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(g.id)}>
-                        삭제
-                      </button>
-                    </td>
-                  </tr>
+      <div className="card">
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>과목</th>
+                {SLOTS.map((slot) => (
+                  <th key={slot.label} style={{ textAlign: "center" }}>
+                    {slot.label}
+                  </th>
                 ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="muted">
-                      입력된 성적이 없습니다
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <div className="form-inline" style={{ marginTop: "0.9rem" }}>
-              <div className="form-row" style={{ marginBottom: 0 }}>
-                <label>과목</label>
-                <select
-                  value={draft.subjectId}
-                  onChange={(e) => setPending((p) => ({ ...p, [key]: { ...draft, subjectId: e.target.value } }))}
-                >
-                  <option value="">선택</option>
-                  {subjects
-                    .filter((s) => !usedSubjectIds.has(s.id))
-                    .map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="form-row" style={{ marginBottom: 0 }}>
-                <label>성취도</label>
-                <select
-                  value={draft.code}
-                  onChange={(e) => setPending((p) => ({ ...p, [key]: { ...draft, code: e.target.value } }))}
-                >
-                  <option value="">선택</option>
-                  {levels.map((l) => (
-                    <option key={l.id} value={l.code}>
-                      {l.code}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button className="btn btn-sm" onClick={() => handleAdd(year, semester)}>
-                추가
-              </button>
-            </div>
-          </div>
-        );
-      })}
+              </tr>
+            </thead>
+            <tbody>
+              {subjects.map((subject) => (
+                <tr key={subject.id}>
+                  <td>
+                    {subject.name}
+                    {subject.is_math && <span className="tag">수학</span>}
+                    {subject.is_informatics && <span className="tag">정보</span>}
+                  </td>
+                  {SLOTS.map((slot) => {
+                    const key = cellKey(subject.id, slot.year, slot.semester);
+                    return (
+                      <td key={key}>
+                        <input
+                          value={grid[key] ?? ""}
+                          onChange={(e) => handleCellChange(key, e.target.value)}
+                          maxLength={1}
+                          style={{ width: 44, textAlign: "center", textTransform: "uppercase" }}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+              {subjects.length === 0 && (
+                <tr>
+                  <td colSpan={SLOTS.length + 1} className="muted">
+                    등록된 과목이 없습니다. 관리자에게 문의하세요.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <button className="btn" style={{ marginTop: "1.1rem" }} onClick={handleSave} disabled={saving}>
+          {saving ? "저장 중..." : "저장"}
+        </button>
+        {saved && <span className="muted" style={{ marginLeft: "0.75rem" }}>저장되었습니다</span>}
+      </div>
     </div>
   );
 }
