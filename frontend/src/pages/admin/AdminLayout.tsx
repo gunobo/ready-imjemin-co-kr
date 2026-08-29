@@ -23,7 +23,10 @@ export default function AdminLayout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <h1>관리자 - ready.imjemin.co.kr</h1>
+        <div className="brand">
+          <div className="brand-mark" />
+          <h1>관리자 · ready.imjemin.co.kr</h1>
+        </div>
         <div className="topbar-user">
           <span>{auth?.username}</span>
           <button className="btn btn-secondary btn-sm" onClick={handleLogout}>

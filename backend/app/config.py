@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     admin_initial_username: str = "admin"
     admin_initial_password: str = "change-me-please"
 
+    google_client_id: str = ""
+
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:5105"]
 
 

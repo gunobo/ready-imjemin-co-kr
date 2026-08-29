@@ -6,9 +6,11 @@ requires-python = ">=3.12"
 dependencies = [
     "bcrypt>=5.0.0",
     "fastapi>=0.141.1",
+    "google-auth>=2.57.0",
     "pydantic-settings>=2.15.0",
     "python-jose[cryptography]>=3.5.0",
     "python-multipart>=0.0.32",
+    "requests>=2.34.2",
     "sqlalchemy>=2.0.52",
     "uvicorn[standard]>=0.52.4",
 ]

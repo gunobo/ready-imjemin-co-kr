@@ -3,17 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_admin
-from app.models import AdmissionType, Role, Stage2Score, Student, SubjectGrade, User
+from app.models import AdmissionType, Stage2Score, Student, SubjectGrade
 from app.schemas import (
-    ResetPasswordRequest,
     Stage2ScoreOut,
     Stage2ScoreUpsert,
-    StudentCreate,
     StudentOut,
     StudentUpdate,
     SubjectGradeOut,
 )
-from app.security import hash_password
 
 router = APIRouter(prefix="/admin", tags=["admin-students"], dependencies=[Depends(require_admin)])
 
@@ -35,17 +32,11 @@ def list_students(db: Session = Depends(get_db)) -> list:
     return [_to_student_out(s) for s in students]
 
 
-@router.post("/students", response_model=StudentOut)
-def create_student(payload: StudentCreate, db: Session = Depends(get_db)) -> dict:
-    if db.query(User).filter(User.username == payload.username).first():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "이미 존재하는 아이디입니다")
-    user = User(username=payload.username, password_hash=hash_password(payload.password), role=Role.student)
-    db.add(user)
-    db.flush()
-    student = Student(user_id=user.id, name=payload.name)
-    db.add(student)
-    db.commit()
-    db.refresh(student)
+@router.get("/students/{student_id}", response_model=StudentOut)
+def get_student(student_id: int, db: Session = Depends(get_db)) -> dict:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "학생을 찾을 수 없습니다")
     return _to_student_out(student)
 
 
@@ -69,16 +60,6 @@ def delete_student(student_id: int, db: Session = Depends(get_db)) -> dict:
     user = student.user
     db.delete(student)
     db.delete(user)
-    db.commit()
-    return {"ok": True}
-
-
-@router.post("/students/{student_id}/reset-password")
-def reset_password(student_id: int, payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> dict:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "학생을 찾을 수 없습니다")
-    student.user.password_hash = hash_password(payload.new_password)
     db.commit()
     return {"ok": True}
 

@@ -23,6 +23,7 @@ nano .env
 - `ADMIN_INITIAL_USERNAME`: 관리자 아이디 (기본 `admin`)
 - `ADMIN_INITIAL_PASSWORD`: 관리자 초기 비밀번호
 - `CLOUDFLARE_TUNNEL_TOKEN`: 아래 3단계에서 발급받은 토큰
+- `GOOGLE_CLIENT_ID`: 학생 구글 로그인용 OAuth Client ID (`xxxx.apps.googleusercontent.com`). Google Cloud Console → APIs & Services → Credentials → Create Credentials → OAuth client ID (Web application) → Authorized JavaScript origins에 `https://ready.imjemin.co.kr` 등록 후 발급. 프론트엔드 빌드에 값이 박히므로(build-time) 나중에 값을 바꾸면 `docker compose up -d --build frontend`로 재빌드해야 반영됩니다.
 
 > `.env`는 git에 커밋되지 않습니다(`.gitignore`에 포함). 관리자 비밀번호는 최초 컨테이너 기동 시 1회만 DB에 시딩되므로, 이후 비밀번호 변경은 관리자 화면(로그인 후 비밀번호 변경) 또는 DB를 초기화한 뒤 다시 기동해야 반영됩니다.
 

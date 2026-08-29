@@ -9,6 +9,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -126,20 +130,10 @@ class AdmissionTypeOut(BaseModel):
 
 
 # ---- students (admin) ----
-class StudentCreate(BaseModel):
-    username: str
-    password: str
-    name: str
-
-
 class StudentUpdate(BaseModel):
     name: str | None = None
     no_attendance_record: bool | None = None
     absence_days: int | None = None
-
-
-class ResetPasswordRequest(BaseModel):
-    new_password: str
 
 
 class StudentOut(BaseModel):

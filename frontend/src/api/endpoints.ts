@@ -18,6 +18,9 @@ import type {
 export const login = (username: string, password: string) =>
   apiClient.post<TokenResponse>("/auth/login", { username, password }).then((r) => r.data);
 
+export const googleLogin = (idToken: string) =>
+  apiClient.post<TokenResponse>("/auth/google", { id_token: idToken }).then((r) => r.data);
+
 export const changePassword = (current_password: string, new_password: string) =>
   apiClient.post("/auth/change-password", { current_password, new_password }).then((r) => r.data);
 
@@ -47,13 +50,10 @@ export const getMyScores = () => apiClient.get<AdmissionScoreResult[]>("/student
 
 // ---- admin: students ----
 export const adminListStudents = () => apiClient.get<Student[]>("/admin/students").then((r) => r.data);
-export const adminCreateStudent = (payload: { username: string; password: string; name: string }) =>
-  apiClient.post<Student>("/admin/students", payload).then((r) => r.data);
+export const adminGetStudent = (id: number) => apiClient.get<Student>(`/admin/students/${id}`).then((r) => r.data);
 export const adminUpdateStudent = (id: number, payload: Partial<Pick<Student, "name" | "no_attendance_record" | "absence_days">>) =>
   apiClient.put<Student>(`/admin/students/${id}`, payload).then((r) => r.data);
 export const adminDeleteStudent = (id: number) => apiClient.delete(`/admin/students/${id}`).then((r) => r.data);
-export const adminResetPassword = (id: number, new_password: string) =>
-  apiClient.post(`/admin/students/${id}/reset-password`, { new_password }).then((r) => r.data);
 export const adminGetStudentGrades = (id: number) =>
   apiClient.get<SubjectGrade[]>(`/admin/students/${id}/grades`).then((r) => r.data);
 export const adminGetStudentScores = (id: number) =>

@@ -21,7 +21,10 @@ export default function StudentLayout() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <h1>마이스터고 입학전형 성적 산출</h1>
+        <div className="brand">
+          <div className="brand-mark" />
+          <h1>마이스터고 입학전형 성적 산출</h1>
+        </div>
         <div className="topbar-user">
           <span>{auth?.name ?? auth?.username}님</span>
           <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
